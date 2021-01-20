@@ -1,7 +1,11 @@
 from model import Model
+
+
 if __name__ == '__main__':
-    OBJ = 'bearPNG/'
+    # OBJ = 'bearPNG/'
+    OBJ = 'catPNG/'
 
     model = Model(OBJ)
-
-    model.factorization()
+    # model.linear_joint()
+    # model.factorization()
+    model.alternating_minimization()

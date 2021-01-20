@@ -1,4 +1,4 @@
-import load_data
+import load_data, utils
 import cv2
 import numpy as np
 import numpy.linalg as lin
@@ -14,7 +14,7 @@ class Model:
     HEIGHT = 512
     WEIGHT = 612
 
-    NUM_OF_PIXELS = 512*612*3
+    NUM_OF_PIXELS = 512*612
 
     def __init__(self, obj_name):
         """
@@ -34,6 +34,7 @@ class Model:
         self.Bt = None
 
         self.mask = cv2.imread('dataset/'+self.obj_name+'mask.png', cv2.IMREAD_GRAYSCALE)[:, :, np.newaxis]
+        self.mask = np.where(self.mask == 255, 1, 0)
 
     def linear_joint(self):
         print('***** Linear Joint Estimation method *****')
@@ -46,17 +47,23 @@ class Model:
         Ip = sp.identity(self.NUM_OF_IMAGES)
 
         left_of_d = sp.kron(Ip, self.L)
-        right_of_d = np.diag(self.M[:, 0])
+        right_of_d = list(np.diag(self.M[:, 0]))
 
+        # 이미지의 수를 줄이던지 해야함.
         for pix in range(1, self.NUM_OF_PIXELS):
-            right_of_d = np.vstack((right_of_d, np.diag(self.M[:, pix])))
-            print(pix)
+            # right_of_d = np.vstack((right_of_d, np.diag(self.M[:, pix]))) original
+            right_of_d.append(list(np.diag(self.M[:, pix])))
+            if pix % 100000 == 0:  # check
+                print(pix)
+
+        right_of_d = np.array(right_of_d)
+        print(right_of_d.shape)
 
         d = sp.hstack([left_of_d, right_of_d])
         print('completed step1!')
         # step2
         u, s, vt = svds(d, k=1, which='SM')
-        print(s)  # #
+        print(s)  ##
 
         equation = d.dot(vt.T)
         y = vt[-1:, 3*self.NUM_OF_PIXELS]
@@ -65,26 +72,24 @@ class Model:
 
         print('completed step2!')
 
-        results = ((0.5*(self.Bt+1))*255)*self.mask
+        self.Bt = (self.Bt - self.Bt.min()) / (self.Bt.max() - self.Bt.min())  # normalize
+        results = self.Bt*self.mask
 
-        print(results.shape)
+        cv2.imshow('linear', results)
+        cv2.waitKey()
+        cv2.destroyAllWindows()
 
     def factorization(self):
         print('***** Factorization based method *****')
         # init
         self.E = None
         self.Bt = None
-
         # step1
         U, S, Bt = np.linalg.svd(self.M, full_matrices=False)
-
+        # print(S)
         root_S = np.diag(np.sqrt(S[:3]))
-
         Shat = U[:, :3].dot(root_S)
         Bt = root_S.dot(Bt[:3, :])
-
-        # print(U.shape, S.shape, Bt.shape)
-        # print(Shat.shape, Bt.shape)
 
         D = np.zeros((2 * self.NUM_OF_IMAGES, 9))
 
@@ -98,47 +103,30 @@ class Model:
             D[i * 2 + 1, :3] = self.L[i, 2] * s
             D[i * 2 + 1, 3:6] = [0, 0, 0]
             D[i * 2 + 1, 6:] = -self.L[i, 0] * s
-        print('completed step1 !')
 
+        D = ((D-D.min())/(D.max()-D.min()))*2-1
         # step2
-        # U, S, Vt = np.linalg.svd(D, full_matrices=False)
-        U,S,Vt = sp.linalg.svds(D, which='SM', k=1)
+        U, S, Vt = np.linalg.svd(D, full_matrices=False)
 
         H = Vt[-1, :].reshape(-1, 3).T
-        print(S)
-
         Bt = np.linalg.inv(H).dot(Bt).T
 
-        temp = D.dot(Vt[-1, :].T)
+        # homogeneous equation
+        # temp = D.dot(Vt[-1, :].T)
 
-        plt.title('D*y = 0')
-        plt.plot(temp.ravel())
-        plt.show()
+        self.Bt = (Bt-Bt.min())/(Bt.max()-Bt.min())  # normalize
+        Bt = np.reshape(self.Bt, (self.HEIGHT, self.WEIGHT, -1))
 
-        normalized_normal = ((Bt - Bt.min()) / (Bt.max() - Bt.min()))*2-1
-
-        self.Bt = np.reshape(normalized_normal, (self.HEIGHT, self.WEIGHT, -1))
-
-        results = ((0.5 * (self.Bt + 1)) * self.mask)  # *self.mask
-
+        results = Bt*self.mask  # *self.mask
         plt.plot(results.ravel())
+        plt.title('results')
         plt.show()
-
-        gt = load_data.load_normal(self.obj_name)
-        plt.plot(gt.ravel())
-        plt.show()
-
-        cv2.imshow('Factorization', gt)
-        cv2.waitKey()
-        cv2.destroyAllWindows()
-
-        print(results.shape)
 
         cv2.imshow('Factorization', results)
         cv2.waitKey()
         cv2.destroyAllWindows()
 
-    def alternating_minimizing(self):
+    def alternating_minimization(self):
         print('***** Alternating Minimization method *****')
 
         #init
@@ -158,7 +146,7 @@ class Model:
             for i in range(self.NUM_OF_IMAGES):
                 numerator = 0
                 denominator = 0
-
+                print(i)
                 for j in range(self.NUM_OF_PIXELS):
                     numerator += (self.M[i, j]*self.L[i, :]).dot(Bt[:, j])
                     denominator += (self.L[i, :].dot(Bt[:, j]))**2
