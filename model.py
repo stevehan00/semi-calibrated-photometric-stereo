@@ -9,7 +9,7 @@ import matplotlib.pyplot as plt
 
 class Model:
 
-    NUM_OF_IMAGES = 96
+    NUM_OF_IMAGES = 40
 
     HEIGHT = 512
     WEIGHT = 612
@@ -28,58 +28,57 @@ class Model:
 
         self.obj_name = obj_name
 
-        self.M = load_data.load_observations(self.obj_name)
+        self.M = load_data.load_observations(self.obj_name, self.NUM_OF_IMAGES)
         self.E = None
-        self.L = load_data.load_lights(self.obj_name)
+        self.L = load_data.load_lights(self.obj_name, self.NUM_OF_IMAGES)
         self.Bt = None
 
+        self.normal_gt = load_data.load_normal_gt(self.obj_name)
         self.mask = cv2.imread('dataset/'+self.obj_name+'mask.png', cv2.IMREAD_GRAYSCALE)[:, :, np.newaxis]
         self.mask = np.where(self.mask == 255, 1, 0)
 
     def linear_joint(self):
+        method = 'linear joint'
         print('***** Linear Joint Estimation method *****')
 
         # init
         self.E = None
         self.Bt = None
 
-        # step1
-        Ip = sp.identity(self.NUM_OF_IMAGES)
+        Ip = sp.identity(self.NUM_OF_PIXELS)
 
         left_of_d = sp.kron(Ip, self.L)
-        right_of_d = list(np.diag(self.M[:, 0]))
+        # right_of_d = np.diag(self.M[:, 0])
+        right_of_d = sp.diags(self.M[:, 0])
 
-        # 이미지의 수를 줄이던지 해야함.
-        for pix in range(1, self.NUM_OF_PIXELS):
-            # right_of_d = np.vstack((right_of_d, np.diag(self.M[:, pix]))) original
-            right_of_d.append(list(np.diag(self.M[:, pix])))
+        for pix in range(1,self.NUM_OF_PIXELS):
+            # right_of_d = np.vstack((right_of_d, np.diag(self.M[:, pix])))
+            right_of_d = sp.vstack([right_of_d, sp.diags(self.M[:, pix])])
+
             if pix % 100000 == 0:  # check
                 print(pix)
 
-        right_of_d = np.array(right_of_d)
+        right_of_d = np.array(right_of_d).T
         print(right_of_d.shape)
 
         d = sp.hstack([left_of_d, right_of_d])
-        print('completed step1!')
-        # step2
         u, s, vt = svds(d, k=1, which='SM')
-        print(s)  ##
+        print(s)
 
-        equation = d.dot(vt.T)
+        # equation = d.dot(vt.T)
         y = vt[-1:, 3*self.NUM_OF_PIXELS]
-        y = ((y - y.min())/(y.max()-y.min()))*2-1
-        self.Bt = np.reshape(y, (100, 100, -1))
+        e = vt[-1:, 3*self.NUM_OF_PIXELS:]
 
-        print('completed step2!')
+        self.E = e
+        self.Bt = utils.normalize(y)
 
-        self.Bt = (self.Bt - self.Bt.min()) / (self.Bt.max() - self.Bt.min())  # normalize
-        results = self.Bt*self.mask
-
-        cv2.imshow('linear', results)
-        cv2.waitKey()
-        cv2.destroyAllWindows()
+        results = np.reshape(self.Bt, (100, 100, -1))
+        results = results*self.mask
+        utils.plot_normal(results, method)
+        return
 
     def factorization(self):
+        method = 'factorization'
         print('***** Factorization based method *****')
         # init
         self.E = None
@@ -115,18 +114,15 @@ class Model:
         # temp = D.dot(Vt[-1, :].T)
 
         self.Bt = (Bt-Bt.min())/(Bt.max()-Bt.min())  # normalize
-        Bt = np.reshape(self.Bt, (self.HEIGHT, self.WEIGHT, -1))
+        results = np.reshape(self.Bt, (self.HEIGHT, self.WEIGHT, -1))
+        results = results*self.mask  # *self.mask
 
-        results = Bt*self.mask  # *self.mask
-        plt.plot(results.ravel())
-        plt.title('results')
-        plt.show()
-
-        cv2.imshow('Factorization', results)
-        cv2.waitKey()
-        cv2.destroyAllWindows()
+        utils.angular_error(self.normal_gt, self.Bt*2-1)
+        utils.plot_normal(results, method)
+        return
 
     def alternating_minimization(self):
+        method = 'alternating minimization'
         print('***** Alternating Minimization method *****')
 
         #init
@@ -136,21 +132,22 @@ class Model:
         E = np.identity(self.NUM_OF_IMAGES)
         Bt = np.zeros((3, self.NUM_OF_PIXELS))
 
-        n_iters = 50
+        n_iters = 30
 
         for t in range(n_iters):
-            next_B, _, _, _ = np.linalg.lstsq(E.dot(self.L), self.M, rcond=None)
-            Bt = next_B
+            # update B
+            Bt, _, _, _ = np.linalg.lstsq(E.dot(self.L), self.M, rcond=None)
             next_E = np.zeros(self.NUM_OF_IMAGES)
 
+            # update E
             for i in range(self.NUM_OF_IMAGES):
-                numerator = 0
-                denominator = 0
-                print(i)
-                for j in range(self.NUM_OF_PIXELS):
-                    numerator += (self.M[i, j]*self.L[i, :]).dot(Bt[:, j])
-                    denominator += (self.L[i, :].dot(Bt[:, j]))**2
-                next_E[i] = numerator/denominator
+                numerator = np.sum(self.L[i, :].T * (self.M[i, :].dot(Bt.T)))
+                denominator = np.sum(np.square(self.L[i, :].dot(Bt)))
+                next_E[i] = numerator / denominator
+                # original
+                # for j in range(self.NUM_OF_PIXELS):
+                #    numerator += (self.M[i, j]*self.L[i, :]).dot(Bt[:, j])
+                #    denominator += (self.L[i, :].dot(Bt[:, j]))**2
 
             next_E = next_E / np.linalg.norm(next_E)
             E = np.diag(next_E)
@@ -158,13 +155,11 @@ class Model:
             self.E = E
             self.Bt = Bt
 
-            print(t, 'of iters')
-        print(self.E.shape, self.Bt.shape)
+        self.Bt = utils.normalize(self.Bt.T)  # normalization
 
-        B = self.Bt.T
-        normalization_normal = ((B - B.min()) / (B.max() - B.min())) * 2 - 1  # -1 to 1 normalization
+        results = np.reshape(self.Bt, (self.HEIGHT, self.WEIGHT, -1))
+        results = results*self.mask
 
-        results = np.reshape(normalization_normal, (100, 100, -1))
-        results = ((0.5 * (results + 1)) * 255)*self.mask
-
-        print(results.shape)
+        utils.angular_error(self.normal_gt, self.Bt)
+        utils.plot_normal(results, method)
+        return

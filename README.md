@@ -6,9 +6,5 @@ This repository includes implementation of paper "Semi-Calibrated Photometric St
 
 
 
-## Citations
-based on : Semi-calibrated Photometric Stereo </br>
-Donghyeon Cho, Yasuyuki Matsushita, Yu-Wing Tai and In So Kweon </br>
-IEEE Transactions on Pattern Analysis and Machine Intelligence (TPAMI), 2020, (IF=17.730). 
-
-dataset : https://sites.google.com/site/photometricstereodata/
+## dataset
+https://sites.google.com/site/photometricstereodata/
