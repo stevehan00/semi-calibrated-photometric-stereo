@@ -5,11 +5,12 @@ import numpy.linalg as lin
 from scipy import sparse as sp
 from scipy.sparse.linalg import svds
 import matplotlib.pyplot as plt
+from sklearn.preprocessing import normalize
 
 
 class Model:
 
-    NUM_OF_IMAGES = 40
+    NUM_OF_IMAGES = 30
 
     HEIGHT = 512
     WEIGHT = 612
@@ -33,9 +34,9 @@ class Model:
         self.L = load_data.load_lights(self.obj_name, self.NUM_OF_IMAGES)
         self.Bt = None
 
+        self.mask = cv2.imread('dataset/'+self.obj_name+'mask.png', cv2.IMREAD_GRAYSCALE)
+        self.mask = np.where(self.mask == 255, 1, 0)[:, :, np.newaxis]
         self.normal_gt = load_data.load_normal_gt(self.obj_name)
-        self.mask = cv2.imread('dataset/'+self.obj_name+'mask.png', cv2.IMREAD_GRAYSCALE)[:, :, np.newaxis]
-        self.mask = np.where(self.mask == 255, 1, 0)
 
     def linear_joint(self):
         method = 'linear joint'
@@ -103,21 +104,17 @@ class Model:
             D[i * 2 + 1, 3:6] = [0, 0, 0]
             D[i * 2 + 1, 6:] = -self.L[i, 0] * s
 
-        D = ((D-D.min())/(D.max()-D.min()))*2-1
         # step2
         U, S, Vt = np.linalg.svd(D, full_matrices=False)
 
         H = Vt[-1, :].reshape(-1, 3).T
         Bt = np.linalg.inv(H).dot(Bt).T
+        self.Bt = utils.normalize(Bt)*2-1
+        utils.angular_error(self.normal_gt, self.Bt)
 
-        # homogeneous equation
-        # temp = D.dot(Vt[-1, :].T)
-
-        self.Bt = (Bt-Bt.min())/(Bt.max()-Bt.min())  # normalize
-        results = np.reshape(self.Bt, (self.HEIGHT, self.WEIGHT, -1))
+        results = np.reshape((self.Bt+1)/2.0, (self.HEIGHT, self.WEIGHT, -1))
         results = results*self.mask  # *self.mask
 
-        utils.angular_error(self.normal_gt, self.Bt*2-1)
         utils.plot_normal(results, method)
         return
 
@@ -130,24 +127,19 @@ class Model:
         self.Bt = None
 
         E = np.identity(self.NUM_OF_IMAGES)
-        Bt = np.zeros((3, self.NUM_OF_PIXELS))
+        Bt = None
 
-        n_iters = 30
+        n_iters = 50
 
         for t in range(n_iters):
             # update B
             Bt, _, _, _ = np.linalg.lstsq(E.dot(self.L), self.M, rcond=None)
             next_E = np.zeros(self.NUM_OF_IMAGES)
-
             # update E
             for i in range(self.NUM_OF_IMAGES):
                 numerator = np.sum(self.L[i, :].T * (self.M[i, :].dot(Bt.T)))
-                denominator = np.sum(np.square(self.L[i, :].dot(Bt)))
+                denominator = np.sum((self.L[i, :].dot(Bt))**2)
                 next_E[i] = numerator / denominator
-                # original
-                # for j in range(self.NUM_OF_PIXELS):
-                #    numerator += (self.M[i, j]*self.L[i, :]).dot(Bt[:, j])
-                #    denominator += (self.L[i, :].dot(Bt[:, j]))**2
 
             next_E = next_E / np.linalg.norm(next_E)
             E = np.diag(next_E)
@@ -155,11 +147,55 @@ class Model:
             self.E = E
             self.Bt = Bt
 
-        self.Bt = utils.normalize(self.Bt.T)  # normalization
-
+        self.Bt = utils.normalize(self.Bt.T)*2-1  # normalization
         results = np.reshape(self.Bt, (self.HEIGHT, self.WEIGHT, -1))
-        results = results*self.mask
+        results = (results+1)/2.0 * self.mask
 
-        utils.angular_error(self.normal_gt, self.Bt)
+        error_map = utils.angular_error(self.normal_gt, self.Bt)
         utils.plot_normal(results, method)
+
+        cv2.imshow('error map', error_map.reshape((self.HEIGHT, self.WEIGHT))*self.mask[:,:,0])
+        cv2.waitKey()
+        cv2.destroyAllWindows()
+        return
+
+    def am_solution(self):
+        """
+        Semi-calibrated photometric stereo
+        solution method based on alternating minimization
+        """
+        max_iter = 50  # can be changed
+        tol = 1.0e-8    # can be changed
+        self.Bt = np.zeros((3, self.M.shape[1]))
+
+        M = self.M
+        # Look at pixels that are illuminated under ALL the illuminations
+        illum_ind = np.where(np.min(M, axis=0) > 0.0)[0]
+        f = M.shape[0]
+        self.E = np.ones(f)
+        N_old = np.zeros((3, M.shape[1]))
+
+        for iter in range(max_iter):
+            # Step 1 : Solve for N
+            N = np.linalg.lstsq(np.diag(self.E) @ self.L, M, rcond=None)[0]
+
+            # Step 2 : Solve for E
+            LN = self.L @ N[:, illum_ind]
+            for i in range(f):
+                self.E[i] = (LN[i, :] @ M[i, illum_ind]) / (LN[i, :] @ LN[i, :])
+            # normalize E
+            self.E /= np.linalg.norm(self.E)
+            if np.linalg.norm(N - N_old) < tol:
+                break
+            else:
+                N_old = N
+        self.Bt = normalize(N, axis=0) # normalize N
+        self.E = np.diag(self.E)     # convert to a diagonal matrix
+
+        plt.plot(self.Bt.T.ravel())
+        plt.show()
+
+        utils.angular_error(self.normal_gt, self.Bt.T)
+        self.Bt = (self.Bt + 1)/2.0
+        utils.plot_normal(self.Bt.T.reshape((self.HEIGHT, self.WEIGHT, -1))*self.mask, '')
         return

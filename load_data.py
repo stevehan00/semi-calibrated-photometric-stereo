@@ -2,6 +2,7 @@ from scipy import io
 import numpy as np
 import cv2
 import utils
+from sklearn.preprocessing import normalize
 
 
 def load_observations(obj_name, maximum):
@@ -18,8 +19,7 @@ def load_observations(obj_name, maximum):
         if cnt == maximum:
             break
 
-        img = cv2.imread(base_dir + line[:-1], cv2.IMREAD_GRAYSCALE)
-
+        img = cv2.imread(base_dir + line[:-1], cv2.IMREAD_GRAYSCALE)/255.0
         if observations is None:
             observations = img.reshape((1, -1))
         else:
@@ -28,7 +28,6 @@ def load_observations(obj_name, maximum):
         cnt += 1
 
     print('completion!')
-    observations = (observations - observations.min()) / (observations.max() - observations.min())
     return observations
 
 
@@ -48,20 +47,18 @@ def load_lights(obj_name, maximum):
         lights.append(line)
         cnt += 1
 
-    lights = np.array(lights)
-    return (lights-lights.min())/(lights.max()-lights.min())
+    lights = np.array(lights)[:, ::-1]
+    return lights
 
-import matplotlib.pyplot as plt
 
 def load_normal_gt(obj_name):
     base_dir = 'dataset/' + obj_name
     load_normals = io.loadmat(base_dir + 'Normal_gt.mat')
-    gt = np.array(load_normals['Normal_gt']).reshape((-1, 3))
 
-    plt.plot(gt.ravel())
-    plt.show()
-
+    gt = np.array(load_normals['Normal_gt'])[:, :, ::-1].reshape((-1, 3))
+    
     return gt
+
 
 def load_intensities(obj_name):
     base_dir = 'dataset/' + obj_name

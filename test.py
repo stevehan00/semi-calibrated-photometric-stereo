@@ -9,5 +9,6 @@ if __name__ == '__main__':
 
     model = Model(OBJ)
     # model.linear_joint()
-    model.factorization()
+    # model.factorization()
     # model.alternating_minimization()
+    model.am_solution()
