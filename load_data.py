@@ -20,6 +20,7 @@ def load_observations(obj_name, maximum):
             break
 
         img = cv2.imread(base_dir + line[:-1], cv2.IMREAD_GRAYSCALE)/255.0
+
         if observations is None:
             observations = img.reshape((1, -1))
         else:
@@ -69,5 +70,14 @@ def load_intensities(obj_name):
         line = list(map(float, line[:-1].split(' ')))
         intensities.append(line)
 
-    print('completion!')
     return np.array(intensities)
+
+
+def load_mask(obj_name):
+    """
+    0 or 1
+    """
+    mask = cv2.imread('dataset/' + obj_name + 'mask.png', cv2.IMREAD_GRAYSCALE)
+    mask[np.where(mask == 255)] = 1
+
+    return mask

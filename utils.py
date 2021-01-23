@@ -1,43 +1,50 @@
 import numpy as np
-import matplotlib.pyplot as plt
 import cv2
-import math
+import matplotlib.pyplot as plt
 
 
-def angular_error(gt, est):
+def angular_error(gt, est, mask):
+    """
+    :param gt: ground truth of surface normal
+    :param est: our estimations of surface normal
+    :param mask: to mark object area in image
+    :return: angular error map
+    """
+
     if len(gt) != len(est):
         print('The dimensions of estimation should be the same as GT.')
         return
-    plt.plot(gt.ravel())
+
+    angular_err = np.sum(gt*est, axis=1)
+    plt.plot(angular_err)
     plt.show()
+    angular_err[np.where(angular_err > 1)] = 1.0
+    angular_err[np.where(angular_err < -1)] = -1.0
 
-    plt.plot(est.ravel())
-    plt.show()
-    dot = np.sum(gt*est, axis=1)
+    ang_err_map = (np.arccos(angular_err)*180.0 / np.pi)
+    mean_angular_err = np.mean(ang_err_map[np.where(mask == 1)])
 
-    dot[np.where(dot > 1)] = 1.0
-    dot[np.where(dot < 0)] = 0.0
+    print('Mean Angular Error : ', mean_angular_err)
 
-    plt.plot(dot)
-    plt.title('dot')
-    plt.show()
-
-    ang_error_map = np.arccos(dot)*180.0 / np.pi
-
-    plt.plot(ang_error_map)
-    plt.show()
-
-    print('Mean Angular Error : ', np.mean(ang_error_map))
-
-    return normalize(ang_error_map)
+    return normalize(ang_err_map*mask)
 
 
 def normalize(target):
     return (target - target.min()) / (target.max() - target.min())
 
 
-def plot_normal(surface_normal, method) -> None:
-    cv2.imshow(method, surface_normal)
-    cv2.waitKey()
-    cv2.destroyAllWindows()
+def plot_normal(surface_normal, error_map, method):
+
+    plt.subplot(1, 2, 1)
+    plt.title('surface normal')
+    plt.imshow(surface_normal[:, :, ::-1])
+    plt.xticks([]); plt.yticks([])
+
+    plt.subplot(1, 2, 2)
+    plt.title('angular error map')
+    plt.imshow(error_map, cmap='gray')
+    plt.xticks([]); plt.yticks([])
+
+    plt.tight_layout()
+    plt.show()
     return
