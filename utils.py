@@ -16,8 +16,7 @@ def angular_error(gt, est, mask):
         return
 
     angular_err = np.sum(gt*est, axis=1)
-    plt.plot(angular_err)
-    plt.show()
+
     angular_err[np.where(angular_err > 1)] = 1.0
     angular_err[np.where(angular_err < -1)] = -1.0
 

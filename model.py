@@ -1,16 +1,14 @@
 import load_data, utils
-import cv2
 import numpy as np
 import numpy.linalg as lin
 from scipy import sparse as sp
 from scipy.sparse.linalg import svds
-import matplotlib.pyplot as plt
 from sklearn.preprocessing import normalize
 
 
 class Model:
 
-    NUM_OF_IMAGES = 30  #
+    NUM_OF_IMAGES = 50  #
 
     HEIGHT = 512
     WEIGHT = 612
@@ -43,38 +41,35 @@ class Model:
 
         # init
         self.E = None
-        self.Bt = None
+        self.Bt = np.zeros((3, self.NUM_OF_PIXELS))
 
-        Ip = sp.identity(self.NUM_OF_PIXELS)
+        Ip = -sp.identity(self.NUM_OF_PIXELS)
 
         left_of_d = sp.kron(Ip, self.L)
-        # right_of_d = np.diag(self.M[:, 0])
+
         right_of_d = sp.diags(self.M[:, 0])
+        # for i in range(self.NUM_OF_PIXELS):
+        # ##to do##
+        # print(right_of_d.shape)
 
-        for pix in range(1,self.NUM_OF_PIXELS):
-            # right_of_d = np.vstack((right_of_d, np.diag(self.M[:, pix])))
-            right_of_d = sp.vstack([right_of_d, sp.diags(self.M[:, pix])])
-
-            if pix % 1000 == 0:  # check
-                print(pix)
-
-        right_of_d = np.array(right_of_d).T
-        print(right_of_d.shape)
-
-        d = sp.hstack([left_of_d, right_of_d])
+        d = sp.hstack([left_of_d, right_of_d.T])
+        print(d.shape)
         u, s, vt = svds(d, k=1, which='SM')
-        print(s)
 
         # equation = d.dot(vt.T)
-        y = vt[-1:, 3*self.NUM_OF_PIXELS]
-        e = vt[-1:, 3*self.NUM_OF_PIXELS:]
+        y = vt[-1, :3*self.NUM_OF_PIXELS].reshape((3, -1))
+        e = vt[-1, 3*self.NUM_OF_PIXELS:]
 
         self.E = e
-        self.Bt = utils.normalize(y)
+        self.Bt = normalize(y, axis=0)
 
-        results = np.reshape(self.Bt, (100, 100, -1))
-        results = results*self.mask
-        utils.plot_normal(results, method)
+        angular_error_map = utils.angular_error(self.normal_gt, self.Bt.T, self.mask.ravel())
+        angular_error_map = angular_error_map.reshape((self.HEIGHT, self.WEIGHT, -1))
+
+        results = np.reshape((self.Bt.T+1)/2.0, (self.HEIGHT, self.WEIGHT, -1))
+        results = results*self.mask[:, :, np.newaxis]
+
+        utils.plot_normal(results, angular_error_map, method)
         return
 
     def factorization(self):
@@ -105,7 +100,6 @@ class Model:
 
         # to solve homogeneous equation
         U, S, Vt = np.linalg.svd(D, full_matrices=False)
-
         H = Vt[-1, :].reshape((3, 3)).T
         E = Shat.dot(H)
         Bt = np.linalg.inv(H).dot(Bt)
