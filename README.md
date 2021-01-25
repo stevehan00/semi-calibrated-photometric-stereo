@@ -23,7 +23,7 @@ scikit-learn : 0.23.2
 
 ## Examples
 
-This normal maps are results of my implementation. BEAR has a Mean Angular Error is about 9.5 and CAT has a Mean Angular Error is about 9.0. Then I showed an error map about each object.
+Under normal maps are derived from an Alternating minimization method. Mean Angular Error of BEAR is about 9.5 and CAT has about 9.0. Then I showed an error map about each object.
 
 <img src="img\bear_normal_AM.PNG" alt="bear AM" style="zoom:50%;" />
 
