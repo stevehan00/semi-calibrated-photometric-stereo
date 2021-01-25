@@ -25,9 +25,9 @@ scikit-learn : 0.23.2
 
 This normal maps are results of my implementation. BEAR has a Mean Angular Error is about 9.5 and CAT has a Mean Angular Error is about 9.0. Then I showed an error map about each object.
 
-<img src="D:\photometric stereo\practice\semi-ps DiLiGenT\img\bear_normal_AM.PNG" alt="bear AM" style="zoom:50%;" />
+<img src="img\bear_normal_AM.PNG" alt="bear AM" style="zoom:50%;" />
 
-<img src="D:\photometric stereo\practice\semi-ps DiLiGenT\img\cat_normal_AM.PNG" alt="cat AM" style="zoom:50%;" />
+<img src="img\cat_normal_AM.PNG" alt="cat AM" style="zoom:50%;" />
 
 
 
