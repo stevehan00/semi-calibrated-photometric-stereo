@@ -6,7 +6,7 @@ This repository includes implementation of paper "Semi-Calibrated Photometric St
 
 ## Overview
 
-Factorization-based and Alternating Minimization method is implemented except for others. Methods are tested using parts of DiLiGent dataset. I include data in this repository. Factorization-based method is developed because Linear-joint estimation is limited at practical setting. That  is related with SVD's Time Complexity. Then, This paper showed an Alternating minimization method avoiding the round-off error. In results, AM method has the higher precision compared to other methods.
+Factorization-based and Alternating Minimization method is implemented except for others. Methods are tested using parts of DiLiGent dataset. And I include data in this repository. Factorization-based method is developed because Linear-joint estimation is limited at practical setting. That is related with SVD's Time Complexity. Then, this paper showed an Alternating minimization method avoiding the round-off error. In results, AM method has the higher precision compared to other methods.
 
 
 
