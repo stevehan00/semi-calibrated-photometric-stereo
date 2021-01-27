@@ -13,10 +13,10 @@ Factorization-based and Alternating Minimization method is implemented except fo
 ## Dependencies
 
 ```
-python : 3.8.5
-numpy : 1.19.2
-matplotlib : 3.3.2
-scikit-learn : 0.23.2
+python == 3.8.5
+numpy == 1.19.2
+matplotlib == 3.3.2
+scikit-learn == 0.23.2
 ```
 
 
@@ -39,5 +39,5 @@ python test.py
 
 
 
-## dataset
+## Dataset
 https://sites.google.com/site/photometricstereodata/
